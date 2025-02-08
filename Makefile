@@ -914,6 +914,7 @@ endif
 # disabled with this same switch, there should not be too much coverage lost
 # because -Wuninitialized will still flag when an uninitialized const variable
 # is used.
+
 KBUILD_CFLAGS += $(call cc-disable-warning, default-const-init-unsafe)
 else
 
