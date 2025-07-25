@@ -2358,9 +2358,12 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 		if (pm_runtime_suspended(dwc->dev))
 			break;
 		ret = dwc3_gadget_suspend(dwc);
+		if (ret) {
+			if (ret < 0)
+				run_stop_fail = true;
+			return ret;
+		}
 		synchronize_irq(dwc->irq_gadget);
-		if (ret < 0)
-			run_stop_fail = true;
 		dwc3_core_exit(dwc);
 		run_stop_fail = false;
 		break;
@@ -2396,7 +2399,9 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 			break;
 
 		if (dwc->current_otg_role == DWC3_OTG_ROLE_DEVICE) {
-			dwc3_gadget_suspend(dwc);
+			ret = dwc3_gadget_suspend(dwc);
+			if (ret)
+				return ret;
 			synchronize_irq(dwc->irq_gadget);
 		}
 
