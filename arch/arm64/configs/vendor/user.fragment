@@ -1,6 +1,7 @@
 # Samsung security/Knox features are disabled here
 # Re-enable for stock-like builds
 # CONFIG_SECURITY_DEFEX is not set
+# CONFIG_KZT is not set
 # CONFIG_FIVE is not set
 # CONFIG_SECURITY_DSMS is not set
 # CONFIG_PROCA is not set
