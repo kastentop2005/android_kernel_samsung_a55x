@@ -1431,7 +1431,7 @@ static void goodix_ts_report_status(struct goodix_ts_core *cd, struct goodix_ts_
     if (ts_event->status_id == STATUS_EVENT_VENDOR_PROXIMITY) {
       // Normalize
       prox_raw = ts_event->status_data[0] ? 1 : 0;
-      prox_report = !prox_raw;
+      prox_report = (!prox_raw) * 5;
 
       cd->ts_event.hover_event = prox_report;
 
