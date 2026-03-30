@@ -1408,37 +1408,50 @@ static void goodix_parse_status(struct goodix_ts_core *cd, u8 *buf)
 
 static void goodix_ts_report_status(struct goodix_ts_core *cd, struct goodix_ts_event *ts_event)
 {
-	if (ts_event->status_type == TYPE_STATUS_EVENT_INFO) {
-		if (ts_event->status_id == SEC_TS_READY_STATUS) {
-			ts_info("report ready status");
-		} else if (ts_event->status_id == SEC_TS_ACK_WET_MODE) {
-			cd->plat_data->wet_mode = ts_event->status_data[0];
-			ts_info("wet mode changed[%d]", cd->plat_data->wet_mode);
-			if (cd->plat_data->wet_mode)
-				cd->plat_data->hw_param.wet_count++;
-		} else if (ts_event->status_id == SEC_TS_NOISE_MODE) {
-			//status_data[0]: bit2-NF Mode, bit1-Lamp Mode, bit0-EFT Mode
-			atomic_set(&cd->plat_data->touch_noise_status, (ts_event->status_data[0] & 0x07) ? 1 : 0);
-			ts_info("TSP NOISE MODE %s", atomic_read(&cd->plat_data->touch_noise_status) ? "ON" : "OFF");
-			if (atomic_read(&cd->plat_data->touch_noise_status))
-				cd->plat_data->hw_param.noise_count++;
-		}
-	} else if (ts_event->status_type == TYPE_STATUS_EVENT_VENDOR_INFO) {
-		if (ts_event->status_id == STATUS_EVENT_VENDOR_PROXIMITY) {
-			cd->ts_event.hover_event = ts_event->status_data[0];
-			sec_input_proximity_report(cd->bus->dev, ts_event->status_data[0]);
-		} else if (ts_event->status_id == STATUS_EVENT_VENDOR_STATE_CHANGED) {
-			if (ts_event->status_data[0] == 2 && ts_event->status_data[1] == 2) {
-				ts_info("Normal changed");
-			} else if (ts_event->status_data[0] == 5 && ts_event->status_data[1] == 2) {
-				ts_info("lp changed");
-			} else if (ts_event->status_data[0] == 6) {
-				ts_info("sleep changed");
-			}
-		} else if (ts_event->status_id == STATUS_EVENT_VENDOR_ACK_CHARGER_STATUS_NOTI) {
-			ts_info("TSP CHARGER MODE %d", ts_event->status_data[0]);
-		}
-	}
+  u8 prox_raw = 0, prox_report = 0;
+  static bool prox_state_valid;
+  static u8 prox_last_report;
+
+  if (ts_event->status_type == TYPE_STATUS_EVENT_INFO) {
+    if (ts_event->status_id == SEC_TS_READY_STATUS) {
+      ts_info("report ready status");
+    } else if (ts_event->status_id == SEC_TS_ACK_WET_MODE) {
+      cd->plat_data->wet_mode = ts_event->status_data[0];
+      ts_info("wet mode changed[%d]", cd->plat_data->wet_mode);
+      if (cd->plat_data->wet_mode)
+        cd->plat_data->hw_param.wet_count++;
+    } else if (ts_event->status_id == SEC_TS_NOISE_MODE) {
+      //status_data[0]: bit2-NF Mode, bit1-Lamp Mode, bit0-EFT Mode
+      atomic_set(&cd->plat_data->touch_noise_status, (ts_event->status_data[0] & 0x07) ? 1 : 0);
+      ts_info("TSP NOISE MODE %s", atomic_read(&cd->plat_data->touch_noise_status) ? "ON" : "OFF");
+      if (atomic_read(&cd->plat_data->touch_noise_status))
+        cd->plat_data->hw_param.noise_count++;
+    }
+  } else if (ts_event->status_type == TYPE_STATUS_EVENT_VENDOR_INFO) {
+    if (ts_event->status_id == STATUS_EVENT_VENDOR_PROXIMITY) {
+      // Normalize
+      prox_raw = ts_event->status_data[0] ? 1 : 0;
+      prox_report = !prox_raw;
+
+      cd->ts_event.hover_event = prox_report;
+
+      if (!prox_state_valid || prox_last_report != prox_report) {
+        prox_last_report = prox_report;
+        prox_state_valid = true;
+        sec_input_proximity_report(cd->bus->dev, prox_report);
+      }
+    } else if (ts_event->status_id == STATUS_EVENT_VENDOR_STATE_CHANGED) {
+      if (ts_event->status_data[0] == 2 && ts_event->status_data[1] == 2) {
+        ts_info("Normal changed");
+      } else if (ts_event->status_data[0] == 5 && ts_event->status_data[1] == 2) {
+        ts_info("lp changed");
+      } else if (ts_event->status_data[0] == 6) {
+        ts_info("sleep changed");
+      }
+    } else if (ts_event->status_id == STATUS_EVENT_VENDOR_ACK_CHARGER_STATUS_NOTI) {
+      ts_info("TSP CHARGER MODE %d", ts_event->status_data[0]);
+    }
+  }
 }
 
 static void goodix_parse_gesture(struct goodix_ts_core *cd, u8 *buf)
