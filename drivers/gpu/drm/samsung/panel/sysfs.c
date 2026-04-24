@@ -4051,6 +4051,7 @@ static ssize_t mask_brightness_store(struct device *dev,
 	struct panel_info *panel_data;
 	struct panel_device *panel = dev_get_drvdata(dev);
 	struct panel_bl_device *panel_bl;
+	struct mask_layer_data mask_data;
 	int value, rc;
 
 	rc = kstrtouint(buf, 0, &value);
@@ -4074,6 +4075,18 @@ static ssize_t mask_brightness_store(struct device *dev,
 			panel_bl->props.mask_layer_br_target, value);
 
 	panel_bl->props.mask_layer_br_target = value;
+
+	if (value > 0) {
+		mask_data.req = MASK_LAYER_ON_BEFORE;
+		panel_drv_set_mask_layer_ioctl(panel, &mask_data);
+		mask_data.req = MASK_LAYER_ON_AFTER;
+		panel_drv_set_mask_layer_ioctl(panel, &mask_data);
+	} else {
+		mask_data.req = MASK_LAYER_OFF_BEFORE;
+		panel_drv_set_mask_layer_ioctl(panel, &mask_data);
+		mask_data.req = MASK_LAYER_OFF_AFTER;
+		panel_drv_set_mask_layer_ioctl(panel, &mask_data);
+	}
 
 	return size;
 }
