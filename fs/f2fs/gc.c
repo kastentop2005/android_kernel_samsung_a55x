@@ -740,7 +740,7 @@ static int f2fs_gc_pinned_control(struct inode *inode, int gc_type,
 
 			f2fs_warn(sbi, "[DDP] %s: Force enable GC = ino %lx after %x GC trials, segno: %u, pin_segno: %u",
 					__func__, inode->i_ino,
-					fi->i_gc_failures[GC_FAILURE_PIN],
+					fi->i_gc_failures,
 					segno, (unsigned int) GET_SEGNO(sbi, sbi->pin_guaranteed_blkaddr));
 			clear_inode_flag(inode, FI_PIN_FILE);
 			return 0;
