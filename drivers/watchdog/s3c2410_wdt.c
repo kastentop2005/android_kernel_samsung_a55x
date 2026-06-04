@@ -27,6 +27,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
 #include <linux/delay.h>
+#include <linux/math64.h>
 #include <linux/rtc.h>
 #include <linux/reboot.h>
 #include <linux/suspend.h>
@@ -284,9 +285,15 @@ MODULE_DEVICE_TABLE(platform, s3c2410_wdt_ids);
 static inline unsigned int s3c2410wdt_max_timeout(struct clk *clock)
 {
 	unsigned long freq = clk_get_rate(clock);
+	
+	const u64 n_max = (u64)(S3C2410_WTCON_PRESCALE_MAX + 1) *
+			S3C2410_WTCON_MAXDIV * S3C2410_WTCNT_MAXCNT;
+	u64 t_max = div64_ul(n_max, freq);
 
-	return S3C2410_WTCNT_MAXCNT / (freq / (S3C2410_WTCON_PRESCALE_MAX + 1)
-				       / S3C2410_WTCON_MAXDIV);
+	if (t_max > UINT_MAX)
+		t_max = UINT_MAX;
+
+	return t_max;
 }
 
 static inline struct s3c2410_wdt *freq_to_wdt(struct notifier_block *nb)
