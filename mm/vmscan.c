@@ -1706,6 +1706,8 @@ retry:
 		enum folio_references references = FOLIOREF_RECLAIM;
 		bool dirty, writeback;
 		unsigned int nr_pages;
+		bool activate = false;
+		bool keep = false;
 
 		cond_resched();
 
@@ -1739,6 +1741,15 @@ retry:
 		 * folios if the tail of the LRU is all dirty unqueued folios.
 		 */
 		folio_check_dirty_writeback(folio, &dirty, &writeback);
+
+		trace_android_vh_shrink_folio_list(folio, dirty, writeback,
+				&activate, &keep);
+		if (activate)
+			goto activate_locked;
+
+		if (keep)
+			goto keep_locked;
+
 		if (dirty || writeback)
 			stat->nr_dirty += nr_pages;
 
@@ -5636,6 +5647,7 @@ static void shrink_many(struct pglist_data *pgdat, struct scan_control *sc)
 	bin = first_bin = get_random_u32_below(MEMCG_NR_BINS);
 restart:
 	op = 0;
+	lruvec = NULL;
 	memcg = NULL;
 	gen = get_memcg_gen(READ_ONCE(pgdat->memcg_lru.seq));
 
@@ -5677,10 +5689,12 @@ restart:
 	if (op)
 		lru_gen_rotate_memcg(lruvec, op);
 
-	mem_cgroup_put(memcg);
-
-	if (lruvec && should_abort_scan(lruvec, sc))
+	if (lruvec && should_abort_scan(lruvec, sc)) {
+		mem_cgroup_put(memcg);
 		return;
+	}
+
+	mem_cgroup_put(memcg);
 
 	/* restart if raced with lru_gen_rotate_memcg() */
 	if (gen != get_nulls_value(pos))
