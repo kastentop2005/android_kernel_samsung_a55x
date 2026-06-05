@@ -394,6 +394,29 @@ static ssize_t __sbi_show_value(struct f2fs_attr *a,
 	}
 }
 
+static void __sbi_store_value(struct f2fs_attr *a,
+		struct f2fs_sb_info *sbi, unsigned char *value,
+		unsigned long t)
+{
+	switch (a->size) {
+	case 1:
+		*(u8 *)value = (u8)t;
+		break;
+	case 2:
+		*(u16 *)value = (u16)t;
+		break;
+	case 4:
+		*(u32 *)value = (u32)t;
+		break;
+	case 8:
+		*(u64 *)value = (u64)t;
+		break;
+	default:
+		f2fs_bug_on(sbi, 1);
+		break;
+	}
+}
+
 #define SEC_MAX_VOLUME_NAME	16
 static bool __volume_is_userdata(struct f2fs_sb_info *sbi)
 {

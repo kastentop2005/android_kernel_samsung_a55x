@@ -4363,9 +4363,11 @@ static int f2fs_migrate_blocks_for_pinned_file(struct inode *inode, block_t star
 			spin_unlock(&FREE_I(sbi)->segmap_lock);
 		}
 
-		f2fs_lock_op(sbi);
+		struct f2fs_lock_context lc;
+
+		f2fs_lock_op(sbi, &lc);
 		f2fs_allocate_new_section(sbi, CURSEG_COLD_DATA_PINNED, false);
-		f2fs_unlock_op(sbi);
+		f2fs_unlock_op(sbi, &lc);
 
 		set_inode_flag(inode, FI_SKIP_WRITES);
 
