@@ -162,6 +162,15 @@ TRACE_DEFINE_ENUM(EX_BLOCK_AGE);
 		{ EX_READ,	"Read" },				\
 		{ EX_BLOCK_AGE,	"Block Age" })
 
+#define show_lock_name(lock)						\
+	__print_symbolic(lock,						\
+		{ LOCK_NAME_CP_RWSEM,		"cp_rwsem" },		\
+		{ LOCK_NAME_NODE_CHANGE,	"node_change" },	\
+		{ LOCK_NAME_NODE_WRITE,		"node_write" },		\
+		{ LOCK_NAME_GC_LOCK,		"gc_lock" },		\
+		{ LOCK_NAME_CP_GLOBAL,		"cp_global" },		\
+		{ LOCK_NAME_IO_RWSEM,		"io_rwsem" })
+
 struct f2fs_sb_info;
 struct f2fs_io_info;
 struct extent_info;
@@ -2288,195 +2297,127 @@ DEFINE_EVENT(f2fs__rw_end, f2fs_datawrite_end,
 	TP_ARGS(inode, offset, bytes)
 );
 
-#ifdef CONFIG_F2FS_ML_STREAMID_TRACE_ON
-DECLARE_EVENT_CLASS(f2fs__data_wb,
-	TP_PROTO(struct inode *inode, loff_t offset, int bytes,
-		pid_t pid, char *pathname, char *command, unsigned long long time,
-		int is_cache, int is_file, int is_fuse, unsigned long long write_chunk,
-		long long *arr),
-	TP_ARGS(inode, offset, bytes, pid, pathname, command, time, is_cache,
-		is_file, is_fuse, write_chunk, arr),
+TRACE_EVENT(f2fs_lock_elapsed_time,
+
+	TP_PROTO(struct f2fs_sb_info *sbi, enum f2fs_lock_name lock_name,
+		bool is_write, struct task_struct *p, int ioprio,
+		unsigned long long total_time,
+		unsigned long long running_time,
+		unsigned long long runnable_time,
+		unsigned long long io_sleep_time,
+		unsigned long long other_time),
+
+	TP_ARGS(sbi, lock_name, is_write, p, ioprio, total_time, running_time,
+		runnable_time, io_sleep_time, other_time),
+
 	TP_STRUCT__entry(
-		__string(pathbuf, pathname)
-		__field(loff_t,	offset)
-		__field(int,	bytes)
-		__field(loff_t,	i_size)
-		__string(cmdline, command)
-		__field(pid_t,	pid)
-		__field(ino_t,	ino)
-		__field(unsigned long long, time)
-		__field(int,	is_cache)
-		__field(int,	is_file)
-		__field(int,	is_fuse)
-		__field(unsigned long long,	write_chunk)
-		__field(int,	mtime_cnt)
-		__field(int,	overwrite_cnt)
-		__field(unsigned long long, mtime)
-		__field(unsigned long long, current_time)
-		__field(int,	append_cnt)
+		__field(dev_t, dev)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(pid_t, pid)
+		__field(int, prio)
+		__field(int, ioprio_class)
+		__field(int, ioprio_data)
+		__field(unsigned int, lock_name)
+		__field(bool, is_write)
+		__field(unsigned long long, total_time)
+		__field(unsigned long long, running_time)
+		__field(unsigned long long, runnable_time)
+		__field(unsigned long long, io_sleep_time)
+		__field(unsigned long long, other_time)
 	),
+
 	TP_fast_assign(
-		{
-			/*
-			 * Replace the spaces in filenames and cmdlines
-			 * because this screws up the tooling that parses
-			 * the traces.
-			 */
-			__assign_str(pathbuf, pathname);
-			(void)strreplace(__get_str(pathbuf), ' ', '_');
-			__entry->offset		= offset;
-			__entry->bytes		= bytes;
-			__entry->i_size		= i_size_read(inode);
-			__assign_str(cmdline, command);
-			(void)strreplace(__get_str(cmdline), ' ', '_');
-			__entry->pid		= pid;
-			__entry->ino		= inode->i_ino;
-			__entry->time       = arr[2];
-			__entry->is_cache	= is_cache;
-			__entry->is_file	= is_file;
-			__entry->is_fuse	= is_fuse;
-			__entry->write_chunk = write_chunk;
-			__entry->mtime_cnt	= arr[3];
-			__entry->overwrite_cnt = arr[7];
-			__entry->mtime		= arr[2];
-			__entry->current_time = time;
-			__entry->append_cnt	= arr[8];
-		}
+		__entry->dev		= sbi->sb->s_dev;
+		memcpy(__entry->comm, p->comm, TASK_COMM_LEN);
+		__entry->pid		= p->pid;
+		__entry->prio		= p->prio;
+		__entry->ioprio_class	= IOPRIO_PRIO_CLASS(ioprio);
+		__entry->ioprio_data	= IOPRIO_PRIO_DATA(ioprio);
+		__entry->lock_name	= lock_name;
+		__entry->is_write	= is_write;
+		__entry->total_time	= total_time;
+		__entry->running_time	= running_time;
+		__entry->runnable_time	= runnable_time;
+		__entry->io_sleep_time	= io_sleep_time;
+		__entry->other_time	= other_time;
 	),
-	TP_printk("entry_name %s, offset %llu, bytes %d, cmdline %s, pid %d,"
-		"i_size %llu, ino %lu, time %llu, mtime %llu, current_time %llu,"
-		"mtime_cnt %d, is_cache %d, is_file %d, is_fuse %d, write_chunk %lld,"
-		"overwrite_cnt %d, append_cnt %d",
-		__get_str(pathbuf), __entry->offset, __entry->bytes,
-		__get_str(cmdline), __entry->pid, __entry->i_size,
-		(unsigned long) __entry->ino, __entry->time, __entry->mtime,
-		__entry->current_time, __entry->mtime_cnt, __entry->is_cache,
-		__entry->is_file, __entry->is_fuse,
-		__entry->write_chunk, __entry->overwrite_cnt, __entry->append_cnt
-	)
+
+	TP_printk("dev = (%d,%d), comm: %s, pid: %d, prio: %d, "
+		"ioprio_class: %d, ioprio_data: %d, lock_name: %s, "
+		"lock_type: %s, total: %llu, running: %llu, "
+		"runnable: %llu, io_sleep: %llu, other: %llu",
+		show_dev(__entry->dev),
+		__entry->comm,
+		__entry->pid,
+		__entry->prio,
+		__entry->ioprio_class,
+		__entry->ioprio_data,
+		show_lock_name(__entry->lock_name),
+		__entry->is_write ? "wlock" : "rlock",
+		__entry->total_time,
+		__entry->running_time,
+		__entry->runnable_time,
+		__entry->io_sleep_time,
+		__entry->other_time)
 );
 
-DECLARE_EVENT_CLASS(f2fs__separation,
-	TP_PROTO(struct inode *inode, loff_t offset, int bytes, pid_t pid,
-		char *pathname, char *command, long long *arr, long long calculate_cold),
-	TP_ARGS(inode, offset, bytes, pid, pathname, command, arr,
-		calculate_cold),
+DECLARE_EVENT_CLASS(f2fs_priority_update,
+
+	TP_PROTO(struct f2fs_sb_info *sbi, enum f2fs_lock_name lock_name,
+		bool is_write, struct task_struct *p, int orig_prio,
+		int new_prio),
+
+	TP_ARGS(sbi, lock_name, is_write, p, orig_prio, new_prio),
+
 	TP_STRUCT__entry(
-		__string(pathbuf, pathname)
-		__field(loff_t,	offset)
-		__field(int,	bytes)
-		__field(loff_t,	i_size)
-		__string(cmdline, command)
-		__field(pid_t,	pid)
-		__field(ino_t,	ino)
-		__field(unsigned long long, time)
-		__field(int,	is_cache)
-		__field(int,	is_fuse)
-		__field(unsigned long long, write_chunk)
-		__field(int,	mtime_cnt)
-		__field(int,	overwrite_cnt)
-		__field(unsigned long long, mtime)
-		__field(unsigned long long, current_time)
-		__field(int,	append_cnt)
-		__field(long long,	overwrite_ratio)
-		__field(long long,	append_ratio)
-		__field(long long,	calculate_cold)
+		__field(dev_t, dev)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(pid_t, pid)
+		__field(unsigned int, lock_name)
+		__field(bool, is_write)
+		__field(int, orig_prio)
+		__field(int, new_prio)
 	),
+
 	TP_fast_assign(
-		{
-			/*
-			 * Replace the spaces in filenames and cmdlines
-			 * because this screws up the tooling that parses
-			 * the traces.
-			 */
-			__assign_str(pathbuf, pathname);
-			(void)strreplace(__get_str(pathbuf), ' ', '_');
-			__entry->offset		= offset;
-			__entry->bytes		= arr[0];
-			__entry->i_size		= arr[1];
-			__assign_str(cmdline, command);
-			(void)strreplace(__get_str(cmdline), ' ', '_');
-			__entry->pid		= pid;
-			__entry->ino		= inode->i_ino;
-			__entry->time       = arr[2];
-			__entry->is_cache	= arr[4];
-			__entry->is_fuse	= arr[5];
-			__entry->write_chunk = arr[6];
-			__entry->mtime_cnt	= arr[3];
-			__entry->overwrite_cnt = arr[7];
-			__entry->mtime		= arr[2];
-			__entry->current_time = 0;
-			__entry->append_cnt	= arr[8];
-			__entry->calculate_cold = calculate_cold;
-			__entry->overwrite_ratio = arr[9];
-			__entry->append_ratio = arr[10];
-		}
+		__entry->dev		= sbi->sb->s_dev;
+		memcpy(__entry->comm, p->comm, TASK_COMM_LEN);
+		__entry->pid		= p->pid;
+		__entry->lock_name	= lock_name;
+		__entry->is_write	= is_write;
+		__entry->orig_prio	= orig_prio;
+		__entry->new_prio	= new_prio;
 	),
-	TP_printk("entry_name %s, offset %llu, bytes %d, cmdline %s, pid %d, "
-		"i_size %llu, ino %lu, time %llu, mtime %llu, current_time %llu, "
-		"mtime_cnt %d, is_cache %d, is_fuse %d, write_chunk %lld, "
-		"overwrite_cnt %d, append_cnt %d, overwrite_ratio %lld, append_ratio %lld, "
-		"calculate_cold %lld",
-		__get_str(pathbuf), __entry->offset, __entry->bytes, __get_str(cmdline),
-		__entry->pid, __entry->i_size, (unsigned long) __entry->ino,
-		__entry->time, __entry->mtime, __entry->current_time, __entry->mtime_cnt,
-		__entry->is_cache,  __entry->is_fuse, __entry->write_chunk,
-		__entry->overwrite_cnt, __entry->append_cnt, __entry->overwrite_ratio,
-		__entry->append_ratio, __entry->calculate_cold
-	)
 
+	TP_printk("dev = (%d,%d), comm: %s, pid: %d, lock_name: %s, "
+		"lock_type: %s, orig_prio: %d, new_prio: %d",
+		show_dev(__entry->dev),
+		__entry->comm,
+		__entry->pid,
+		show_lock_name(__entry->lock_name),
+		__entry->is_write ? "wlock" : "rlock",
+		__entry->orig_prio,
+		__entry->new_prio)
 );
-DEFINE_EVENT(f2fs__separation,
-			f2fs_separation_start,
-	TP_PROTO(struct inode *inode, loff_t offset, int bytes,
-		pid_t pid, char *pathname, char *command, long long *arr,
-		long long calculate_cold),
-	TP_ARGS(inode, offset, bytes, pid, pathname, command, arr,
-		calculate_cold));
 
+DEFINE_EVENT(f2fs_priority_update, f2fs_priority_uplift,
 
-DEFINE_EVENT(f2fs__data_wb, f2fs_datawrite_start_wb,
-	TP_PROTO(struct inode *inode, loff_t offset, int bytes,
-		 pid_t pid, char *pathname, char *command, unsigned long long time,
-		 int is_cache, int is_file, int is_fuse,
-		 unsigned long long write_chunk, long long *arr),
-	TP_ARGS(inode, offset, bytes, pid, pathname, command, time, is_cache,
-	is_file, is_fuse, write_chunk, arr));
+	TP_PROTO(struct f2fs_sb_info *sbi, enum f2fs_lock_name lock_name,
+		bool is_write, struct task_struct *p, int orig_prio,
+		int new_prio),
 
-#ifndef F2FS_GET_PATHNAME
-#define F2FS_GET_PATHNAME
+	TP_ARGS(sbi, lock_name, is_write, p, orig_prio, new_prio)
+);
 
-/* Sizes an on-stack array, so careful if sizing this up ! */
-#define MAX_TRACE_PATHBUF_LEN	256
+DEFINE_EVENT(f2fs_priority_update, f2fs_priority_restore,
 
-static inline char *
-f2fs_get_pathname(char *buf, int buflen, struct inode *inode)
-{
-	char *path;
-	struct dentry *d;
+	TP_PROTO(struct f2fs_sb_info *sbi, enum f2fs_lock_name lock_name,
+		bool is_write, struct task_struct *p, int orig_prio,
+		int new_prio),
 
-	/*
-	 * d_obtain_alias() will either iput() if it locates an existing
-	 * dentry or transfer the reference to the new dentry created.
-	 * So get an extra reference here.
-	 */
-	ihold(inode);
-	d = d_obtain_alias(inode);
-	if (likely(!IS_ERR(d))) {
-		path = dentry_path_raw(d, buf, buflen);
-		if (unlikely(IS_ERR(path))) {
-			strcpy(buf, "ERROR");
-			path = buf;
-		}
-		dput(d);
-	} else {
-		strcpy(buf, "ERROR");
-		path = buf;
-	}
-	return path;
-}
-#endif
-#endif
+	TP_ARGS(sbi, lock_name, is_write, p, orig_prio, new_prio)
+);
+
 #endif /* _TRACE_F2FS_H */
 
  /* This part must be outside protection */

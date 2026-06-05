@@ -78,6 +78,12 @@
 /* skip BOS descriptor request */
 #define USB_QUIRK_NO_BOS			BIT(17)
 
+/* Device claims zero configurations, forcing to 1 */
+#define USB_QUIRK_FORCE_ONE_CONFIG		BIT(18)
+
+/* Device claims zero configurations, forcing to 1 */
+#define USB_QUIRK_FORCE_ONE_CONFIG		BIT(18)
+
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 /* Hub can't support usb suspend */
 #define USB_QUIRK_HUB_NO_SUSPEND		BIT(20)
